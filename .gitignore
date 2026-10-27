@@ -1,0 +1,11 @@
+# SQL dumps and staging areas must never be pushed to GitHub.
+/backups/
+*.sql
+*.log
+*.cnf
+*.lock
+*.new
+*.tmp
+*.pyc
+__pycache__/
+.venv/
