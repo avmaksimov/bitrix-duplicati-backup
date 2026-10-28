@@ -4,7 +4,9 @@
 set -Eeuo pipefail
 umask 077
 
-InstallDir="${BITRIX_BACKUP_INSTALL_DIR:-/usr/scripts/bitrix_mysql_backup}"
+# Install beside this script unless an explicit destination was supplied.
+ScriptDir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+InstallDir="${BITRIX_BACKUP_INSTALL_DIR:-$ScriptDir}"
 GitHubRepo="${BITRIX_BACKUP_GITHUB_REPO:-avmaksimov/bitrix-duplicati-backup}"
 GitHubBranch="${BITRIX_BACKUP_BRANCH:-main}"
 LocalSource="${BITRIX_BACKUP_SOURCE_DIR:-}"
@@ -111,7 +113,19 @@ for name in "${Files[@]}"; do
 done
 
 if (( ${#Chosen[@]} == 0 )); then
-    info 'No updates selected. Nothing changed.'
+    # Also support running install.sh from an already extracted ZIP archive:
+    # the files may be identical, but their executable bits may be missing.
+    if [[ -d "$InstallDir" && ! -L "$InstallDir" ]]; then
+        for name in install.sh bitrix_mysql_backup.sh; do
+            if [[ -f "$InstallDir/$name" && ! -L "$InstallDir/$name" ]]; then
+                chmod 755 -- "$InstallDir/$name" || error "Cannot set executable permissions: $name"
+            fi
+        done
+        if [[ ! -e "$InstallDir/backups" && ! -L "$InstallDir/backups" ]]; then
+            mkdir -m 700 -- "$InstallDir/backups" || error 'Cannot create private backups directory'
+        fi
+    fi
+    info 'No file updates selected. Existing code was not replaced.'
     exit 0
 fi
 

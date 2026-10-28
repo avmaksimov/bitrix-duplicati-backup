@@ -16,10 +16,10 @@
 | `README.md`, `README.ru.md` | Инструкции на двух языках |
 | `.gitignore` | Исключает SQL, журналы и временные файлы |
 
-После установки:
+После установки (в **любом выбранном каталоге**):
 
 ```text
-/usr/scripts/bitrix_mysql_backup/
+<каталог-проекта>/
 ├── install.sh
 ├── bitrix_mysql_backup.sh
 ├── bitrix_mysql_backup.py
@@ -45,19 +45,25 @@
 
 ## Установка и обновление — одна команда
 
-Выполняется **вручную**, отдельно от заданий Duplicati. После публикации репозитория:
+Установщик запускается **вручную**, отдельно от заданий Duplicati. **Каталогом установки по умолчанию является папка, где находится `install.sh`**, независимо от текущего рабочего каталога. Например, можно выбрать `/usr/scripts/bitrix_mysql_backup`, `/opt/bitrix_mysql_backup` или собственный путь.
+
+Создайте нужную папку и скачайте в неё установщик:
 
 ```bash
+mkdir -p /opt/bitrix_mysql_backup
+cd /opt/bitrix_mysql_backup
 curl -fL --output install.sh \
   https://raw.githubusercontent.com/avmaksimov/bitrix-duplicati-backup/main/install.sh
 bash install.sh
 ```
 
-При последующих обновлениях можно выполнить:
+Для дальнейших обновлений запустите тот же установщик из этой папки:
 
 ```bash
-bash /usr/scripts/bitrix_mysql_backup/install.sh
+bash /opt/bitrix_mysql_backup/install.sh
 ```
+
+`/opt/bitrix_mysql_backup` здесь **только пример**, это не обязательный системный путь. Если файлы проекта уже распакованы в выбранную папку, их можно использовать прямо там; установщик также обеспечивает исполняемые права `.sh` при совпадающих файлах.
 
 В обоих случаях установщик скачает `.tar.gz` из ветки `main`, сверит SHA-256 **каждого файла** и предложит `[y/N]` для каждого нового/изменённого файла. `N` пропускает файл. Совпавшие файлы не заменяются. Это **не сравнение версий по времени**: разные SHA означают только различающееся содержимое; направление «новее/старее» не устанавливается.
 
@@ -68,7 +74,7 @@ bash /usr/scripts/bitrix_mysql_backup/install.sh
 ```bash
 BITRIX_BACKUP_GITHUB_REPO=OWNER/bitrix-duplicati-backup \
 BITRIX_BACKUP_BRANCH=main \
-BITRIX_BACKUP_INSTALL_DIR=/usr/scripts/bitrix_mysql_backup \
+BITRIX_BACKUP_INSTALL_DIR=/другой/каталог \
   bash install.sh
 ```
 
@@ -85,32 +91,34 @@ BITRIX_BACKUP_SOURCE_DIR=/tmp/bitrix-duplicati-backup bash /tmp/bitrix-duplicati
 В дополнительных настройках нужного задания:
 
 ```text
---run-script-before-required = /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+--run-script-before-required = /opt/bitrix_mysql_backup/bitrix_mysql_backup.sh
 --run-script-timeout = 1h
 ```
 
-В **источники резервного копирования** добавьте `/usr/scripts/bitrix_mysql_backup/backups/` или конкретную папку `<имя_базы>.sql` внутри неё. Сам скрипт `bitrix_mysql_backup.sh` должен быть исполняемым (`755`). `--run-script-before-required` важен: при ошибке Python он сообщает ненулевой код, и операция Backup должна прерваться, а не архивировать старый/неполный набор дампов.
+В **источники резервного копирования** добавьте `<каталог-проекта>/backups/` или конкретную папку `<имя_базы>.sql` внутри неё. Выше указан пример для `/opt/bitrix_mysql_backup`; используйте свой абсолютный путь. Установщик выставляет исполняемые права `.sh` автоматически. `--run-script-before-required` важен: при ошибке Python он сообщает ненулевой код, и операция Backup должна прерваться, а не архивировать старый/неполный набор дампов.
 
 Обёртка игнорирует любые операции, кроме `Backup` (включая `Restore`). Обновление кода **никогда не происходит автоматически** при резервном копировании.
 
 ## Ручная проверка
 
 ```bash
+cd /opt/bitrix_mysql_backup  # замените на свой каталог
+
 # Ничего не выгружает — операция не Backup
-DUPLICATI__OPERATIONNAME=Restore /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+DUPLICATI__OPERATIONNAME=Restore ./bitrix_mysql_backup.sh
 
 # Реально создаёт SQL-файлы и журнал
-DUPLICATI__OPERATIONNAME=Backup /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+DUPLICATI__OPERATIONNAME=Backup ./bitrix_mysql_backup.sh
 
 echo "Exit code: $?"
-tail -n 40 /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.log
+tail -n 40 ./bitrix_mysql_backup.log
 ```
 
 Для независимого теста Python без обновления рабочего комплекта:
 
 ```bash
-python3 /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.py \
-  --output-root /usr/scripts/backup-test
+python3 ./bitrix_mysql_backup.py \
+  --output-root /tmp/bitrix-backup-test
 ```
 
 Прямой запуск Python **не пишет журнал на диск**, а выводит диагностические сообщения в консоль. При запуске через Bash `tee` показывает их сразу и записывает в `bitrix_mysql_backup.log` (журнал перезаписывается при каждом `Backup`). Код возврата Python передаётся Duplicati даже при использовании `tee`.

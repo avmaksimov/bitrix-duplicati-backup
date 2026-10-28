@@ -17,10 +17,10 @@ This is a **Bitrix-specific** tool, not a general-purpose MySQL backup framework
 | `.gitignore` | Excludes SQL, logs and temporary files |
 | `backups/` | Locally generated database dumps, excluded from Git |
 
-Default installation:
+Installation layout (**choose any directory**):
 
 ```text
-/usr/scripts/bitrix_mysql_backup/
+<project-directory>/
 ├── install.sh
 ├── bitrix_mysql_backup.sh
 ├── bitrix_mysql_backup.py
@@ -45,19 +45,25 @@ Default installation:
 
 ## First installation and updates
 
-Run the installer manually, **not as part of the Duplicati backup job**. Once the repository is published:
+Run the installer manually, **not as part of the Duplicati backup job**. By default, it installs into **the directory containing `install.sh`**, regardless of the current working directory. Choose any suitable path, such as `/opt/bitrix_mysql_backup` or `/usr/scripts/bitrix_mysql_backup`.
+
+For example, create a directory and download the installer into it:
 
 ```bash
+mkdir -p /opt/bitrix_mysql_backup
+cd /opt/bitrix_mysql_backup
 curl -fL --output install.sh \
   https://raw.githubusercontent.com/avmaksimov/bitrix-duplicati-backup/main/install.sh
 bash install.sh
 ```
 
-For subsequent updates:
+For future updates, run the same installer:
 
 ```bash
-bash /usr/scripts/bitrix_mysql_backup/install.sh
+bash /opt/bitrix_mysql_backup/install.sh
 ```
+
+`/opt/bitrix_mysql_backup` is **only an example**, not a required location. If you already extracted the project into the chosen directory, you may run it there; the installer also ensures `.sh` executable permissions if files are already identical.
 
 Both commands fetch the `main` branch archive using `curl`, compare each tracked file using **SHA-256**, and prompt `[y/N]` before replacing any new or changed file. Press `N` to skip it. Matching files are left alone. Different checksums indicate **different content**, not necessarily that the remote file is newer.
 
@@ -68,7 +74,7 @@ Git is **not required** and the installer never installs operating-system packag
 ```bash
 BITRIX_BACKUP_GITHUB_REPO=OWNER/bitrix-duplicati-backup \
 BITRIX_BACKUP_BRANCH=main \
-BITRIX_BACKUP_INSTALL_DIR=/usr/scripts/bitrix_mysql_backup \
+BITRIX_BACKUP_INSTALL_DIR=/another/directory \
   bash install.sh
 ```
 
@@ -85,32 +91,34 @@ This uses the same comparison/staging/replacement procedure without downloading 
 Use these job advanced options:
 
 ```text
---run-script-before-required = /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+--run-script-before-required = /opt/bitrix_mysql_backup/bitrix_mysql_backup.sh
 --run-script-timeout = 1h
 ```
 
-Add `/usr/scripts/bitrix_mysql_backup/backups/` (or its `<database>.sql` child) to the **backup source paths**. The hook must be executable (`755`). A required hook prevents Duplicati from backing up an invalid or stale SQL set if preparation fails.
+Add `<project-directory>/backups/` (or its `<database>.sql` child) to the **backup source paths**. The example above uses `/opt/bitrix_mysql_backup`; replace it with your own absolute path. The installer sets `.sh` files executable automatically. A required hook prevents Duplicati from backing up an invalid or stale SQL set if preparation fails.
 
 The wrapper skips every operation other than `Backup`, including `Restore`. Code updates are never performed while preparing a backup.
 
 ## Manual checks
 
 ```bash
+cd /opt/bitrix_mysql_backup  # change to your chosen directory
+
 # Does not dump anything: this is not Backup
-DUPLICATI__OPERATIONNAME=Restore /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+DUPLICATI__OPERATIONNAME=Restore ./bitrix_mysql_backup.sh
 
 # Runs the real dump and writes the log
-DUPLICATI__OPERATIONNAME=Backup /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.sh
+DUPLICATI__OPERATIONNAME=Backup ./bitrix_mysql_backup.sh
 
 echo "Exit code: $?"
-tail -n 40 /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.log
+tail -n 40 ./bitrix_mysql_backup.log
 ```
 
 To create a separate test set without overwriting active SQL dumps:
 
 ```bash
-python3 /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.py \
-  --output-root /usr/scripts/backup-test
+python3 ./bitrix_mysql_backup.py \
+  --output-root /tmp/bitrix-backup-test
 ```
 
 Direct Python execution prints to the console only and creates **no persistent log**. The Bash hook uses `tee` to display and log Python output in real time, truncating the previous log at the start of each actual Backup. Python's exit code is forwarded to Duplicati, rather than `tee`'s.
