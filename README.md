@@ -40,7 +40,7 @@ Default installation:
 - Read access to `/home/bitrix/www/bitrix/php_interface/dbconn.php` and connectivity to `/var/lib/mysqld/mysqld.sock`.
 - **InnoDB** for all base tables; a different storage engine causes the dump to fail safely.
 - The account running the hook must be able to read Bitrix configuration and write the log and SQL files. The installer creates private `backups/` permissions (`700`); verify service-user access if Duplicati runs as a different user.
-- Disk space for old and new SQL snapshots simultaneously, especially during the initial migration.
+- Disk space for old and new SQL snapshots simultaneously while creating a backup.
 - A **public GitHub repository** for the unauthenticated `curl` installer. Private repositories are not currently supported.
 
 ## First installation and updates
@@ -72,7 +72,7 @@ BITRIX_BACKUP_INSTALL_DIR=/usr/scripts/bitrix_mysql_backup \
   bash install.sh
 ```
 
-For an **offline trial before publishing to GitHub**, point to an unpacked local source directory:
+For **local/offline testing**, point to an unpacked source directory:
 
 ```bash
 BITRIX_BACKUP_SOURCE_DIR=/tmp/bitrix-duplicati-backup bash /tmp/bitrix-duplicati-backup/install.sh
@@ -92,19 +92,6 @@ Use these job advanced options:
 Add `/usr/scripts/bitrix_mysql_backup/backups/` (or its `<database>.sql` child) to the **backup source paths**. The hook must be executable (`755`). A required hook prevents Duplicati from backing up an invalid or stale SQL set if preparation fails.
 
 The wrapper skips every operation other than `Backup`, including `Restore`. Code updates are never performed while preparing a backup.
-
-## Moving an existing Bitrix installation
-
-If an older job calls `/usr/scripts/d2_before_backup.sh` and keeps dumps at `/usr/scripts/bitrix_86.sql/` or `/usr/scripts/bitrix_88.sql/`:
-
-1. **Keep the old scripts and dumps** until the new job succeeds. Check available disk space.
-2. Install the new project into `/usr/scripts/bitrix_mysql_backup/`.
-3. Run `python3 /usr/scripts/bitrix_mysql_backup/bitrix_mysql_backup.py` manually. This makes a **real** database dump in the new `backups/` directory.
-4. Check `backups/<database>.sql/` and `Done. Validated SQL tables: N`.
-5. Change the Duplicati hook path and backup source path. Avoid including **both** the old and the new SQL directories unless intentional.
-6. Run an actual Duplicati backup; remove obsolete local files only after verifying the new job.
-
-The installer does **not** move old dumps or edit existing Duplicati jobs.
 
 ## Manual checks
 
