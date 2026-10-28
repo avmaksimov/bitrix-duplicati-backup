@@ -98,34 +98,23 @@ for name in "${Files[@]}"; do
             continue
         fi
         info "  DIFF  $name (local: ${target_hash:0:12}; GitHub/source: ${source_hash:0:12})"
-        prompt="  Replace $name? [y/N]: "
-        default_yes=false
+        if [[ ! -r /dev/tty ]]; then
+            error 'An interactive terminal is required to approve replacing changed files'
+        fi
+        printf '  Replace %s? [y/N]: ' "$name" > /dev/tty
+        if ! IFS= read -r answer < /dev/tty; then
+            error 'Cannot read confirmation from terminal'
+        fi
+        case "$answer" in
+            y|Y|yes|YES|Yes) Chosen+=("$name");;
+            *) info "  SKIP  $name";;
+        esac
     elif [[ -e "$destination" || -L "$destination" ]]; then
         error "Unsafe target file: $destination"
     else
-        info "  NEW   $name"
-        prompt="  Install $name? [Y/n]: "
-        default_yes=true
+        info "  NEW   $name (installing automatically)"
+        Chosen+=("$name")
     fi
-
-    if [[ ! -r /dev/tty ]]; then
-        error 'An interactive terminal is required to approve file changes'
-    fi
-    printf '%s' "$prompt" > /dev/tty
-    if ! IFS= read -r answer < /dev/tty; then
-        error 'Cannot read confirmation from terminal'
-    fi
-    case "$answer" in
-        y|Y|yes|YES|Yes) Chosen+=("$name");;
-        '')
-            if "$default_yes"; then
-                Chosen+=("$name")
-            else
-                info "  SKIP  $name"
-            fi
-            ;;
-        *) info "  SKIP  $name";;
-    esac
 done
 
 if (( ${#Chosen[@]} == 0 )); then
