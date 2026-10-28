@@ -65,7 +65,7 @@ bash /opt/bitrix_mysql_backup/install.sh
 
 `/opt/bitrix_mysql_backup` is **only an example**, not a required location. If you already extracted the project into the chosen directory, you may run it there; the installer also ensures `.sh` executable permissions if files are already identical.
 
-Both commands fetch the `main` branch archive using `curl`, compare each tracked file using **SHA-256**, and prompt `[y/N]` before replacing any new or changed file. Press `N` to skip it. Matching files are left alone. Different checksums indicate **different content**, not necessarily that the remote file is newer.
+Both commands fetch the `main` branch archive using `curl` and compare files by **SHA-256**. New files prompt `Install? [Y/n]` (Enter installs); changed files prompt `Replace? [y/N]` (Enter skips). You can skip either. Identical files, including a previously downloaded `install.sh`, are not prompted or replaced. If `install.sh` itself differs from the GitHub version, the installer asks before replacing it. Different checksums indicate **different content**, not necessarily that the remote file is newer.
 
 All accepted files are staged next to their targets as `.new`, verified using SHA-256, then replaced individually with `mv`. Shell scripts receive mode `755`, all other tracked files `644`. SQL backups and logs are never overwritten by the installer. There are no copies of old scripts and no automatic rollback; **the whole group of files is not replaced transactionally**. Update only when no Duplicati job is running.
 

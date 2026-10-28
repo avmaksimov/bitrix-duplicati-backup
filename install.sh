@@ -82,6 +82,11 @@ hash_file() {
 }
 
 info "Destination: $InstallDir"
+if [[ -f "$InstallDir/bitrix_mysql_backup.py" || -f "$InstallDir/bitrix_mysql_backup.sh" ]]; then
+    info 'Mode: update/verify existing installation'
+else
+    info 'Mode: first installation'
+fi
 info 'SHA-256 comparison:'
 for name in "${Files[@]}"; do
     source_hash=$(hash_file "$SourceDir/$name")
@@ -93,21 +98,32 @@ for name in "${Files[@]}"; do
             continue
         fi
         info "  DIFF  $name (local: ${target_hash:0:12}; GitHub/source: ${source_hash:0:12})"
+        prompt="  Replace $name? [y/N]: "
+        default_yes=false
     elif [[ -e "$destination" || -L "$destination" ]]; then
         error "Unsafe target file: $destination"
     else
         info "  NEW   $name"
+        prompt="  Install $name? [Y/n]: "
+        default_yes=true
     fi
 
     if [[ ! -r /dev/tty ]]; then
-        error 'An interactive terminal is required to approve file updates'
+        error 'An interactive terminal is required to approve file changes'
     fi
-    printf '  Replace %s? [y/N]: ' "$name" > /dev/tty
+    printf '%s' "$prompt" > /dev/tty
     if ! IFS= read -r answer < /dev/tty; then
         error 'Cannot read confirmation from terminal'
     fi
     case "$answer" in
         y|Y|yes|YES|Yes) Chosen+=("$name");;
+        '')
+            if "$default_yes"; then
+                Chosen+=("$name")
+            else
+                info "  SKIP  $name"
+            fi
+            ;;
         *) info "  SKIP  $name";;
     esac
 done
