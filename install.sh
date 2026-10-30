@@ -10,7 +10,8 @@ InstallDir="${BITRIX_BACKUP_INSTALL_DIR:-$ScriptDir}"
 GitHubRepo="${BITRIX_BACKUP_GITHUB_REPO:-avmaksimov/bitrix-duplicati-backup}"
 GitHubBranch="${BITRIX_BACKUP_BRANCH:-main}"
 LocalSource="${BITRIX_BACKUP_SOURCE_DIR:-}"
-Files=(bitrix_mysql_backup.py bitrix_mysql_backup.sh README.md README.ru.md .gitignore install.sh)
+# Explicit allowlist of program files; dot-prefixed files are excluded from extraction.
+Files=(bitrix_mysql_backup.py bitrix_mysql_backup.sh README.md README.ru.md install.sh)
 Chosen=()
 TempDir=''
 
@@ -49,7 +50,9 @@ else
         || error 'Cannot download GitHub archive'
     tar -tzf "$Archive" >/dev/null || error 'Downloaded file is not a valid tar.gz archive'
     mkdir -p "$TempDir/unpacked"
-    tar -xzf "$Archive" -C "$TempDir/unpacked" || error 'Cannot extract GitHub archive'
+    # Exclude dotfiles and dot-directories at every level, e.g. .gitignore and .github/.
+    tar --exclude='*/.*' --no-same-owner -xzf "$Archive" -C "$TempDir/unpacked" \
+        || error 'Cannot extract GitHub archive'
     SourceDir=''
     for candidate in "$TempDir"/unpacked/*; do
         if [[ -d "$candidate" ]]; then

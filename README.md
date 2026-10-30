@@ -14,7 +14,7 @@ This is a **Bitrix-specific** tool, not a general-purpose MySQL backup framework
 | `bitrix_mysql_backup.py` | MySQL snapshot, SQL stream splitter, validation and publishing |
 | `install.sh` | One interactive install/update command using `curl`, with no Git required |
 | `README.md`, `README.ru.md` | English and Russian documentation |
-| `.gitignore` | Excludes SQL, logs and temporary files |
+| `.gitignore` | Repository-only exclusions; not extracted or installed by `install.sh` |
 | `backups/` | Locally generated database dumps, excluded from Git |
 
 Installation layout (**choose any directory**):
@@ -27,7 +27,6 @@ Installation layout (**choose any directory**):
 ├── bitrix_mysql_backup.log       # created only by Backup through Bash
 ├── README.md
 ├── README.ru.md
-├── .gitignore
 └── backups/
     └── bitrix_88.sql/           # DB name comes from Bitrix dbconn.php
         ├── b_user.sql
@@ -65,7 +64,7 @@ bash /opt/bitrix_mysql_backup/install.sh
 
 `/opt/bitrix_mysql_backup` is **only an example**, not a required location. If you already extracted the project into the chosen directory, you may run it there; the installer also ensures `.sh` executable permissions if files are already identical.
 
-Both commands fetch the `main` branch archive using `curl` and compare files by **SHA-256**. New files (`NEW`) are installed automatically without prompting. Existing changed files (`DIFF`) prompt `Replace? [y/N]` (Enter skips). Identical files, including a previously downloaded `install.sh`, are not prompted or replaced. If `install.sh` itself differs from the GitHub version, the installer asks before replacing it. Different checksums indicate **different content**, not necessarily that the remote file is newer.
+Both commands download the `main` branch archive using `curl`, extract it **without dot-prefixed files or directories** (such as `.gitignore` and `.github/`), and compare the five program files using **SHA-256**. Hidden files are still part of the downloaded archive, but are not extracted. New files (`NEW`) are installed automatically without prompting. Existing changed files (`DIFF`) prompt `Replace? [y/N]` (Enter skips). Identical files, including a previously downloaded `install.sh`, are not prompted or replaced. If `install.sh` itself differs from the GitHub version, the installer asks before replacing it. Different checksums indicate **different content**, not necessarily that the remote file is newer.
 
 All accepted files are staged next to their targets as `.new`, verified using SHA-256, then replaced individually with `mv`. Shell scripts receive mode `755`, all other tracked files `644`. SQL backups and logs are never overwritten by the installer. There are no copies of old scripts and no automatic rollback; **the whole group of files is not replaced transactionally**. Update only when no Duplicati job is running.
 
@@ -84,7 +83,7 @@ For **local/offline testing**, point to an unpacked source directory:
 BITRIX_BACKUP_SOURCE_DIR=/tmp/bitrix-duplicati-backup bash /tmp/bitrix-duplicati-backup/install.sh
 ```
 
-This uses the same comparison/staging/replacement procedure without downloading the archive.
+This uses the same comparison/staging/replacement procedure without downloading any files from GitHub.
 
 ## Configure Duplicati
 
@@ -135,7 +134,7 @@ Direct Python execution prints to the console only and creates **no persistent l
 
 **Limitations:** the transaction provides consistency for participating InnoDB table data provided no concurrent schema changes (`ALTER`/`DROP`/`TRUNCATE`, etc.). The separately produced schema-only tables are not from that same timestamp. Search indexes and statistics are intentionally omitted. Validation checks that files exist and have plausible structure; **it does not test SQL restore**.
 
-A sudden machine crash or `SIGKILL` can leave temporary `.cnf` files or staging directories; check for stale artifacts when recovering from interrupted runs. Do not archive the whole project directory with Duplicati unless logs and temporary files are explicitly excluded.
+The persistent `.bitrix_mysql_backup.lock` file coordinates concurrent runs: its OS lock is automatically released when Python exits, but the file itself is not deleted. **Do not delete this file**, as doing so can break the protection against parallel runs. If Duplicati backs up the entire project directory, exclude `*/.bitrix_mysql_backup.lock`, `*/bitrix_mysql_backup.log`, and temporary `*/.bitrix_mysql_db.*.cnf` files. A sudden machine crash or `SIGKILL` can leave temporary `.cnf` files or staging directories; check for stale artifacts when recovering from interrupted runs. Do not archive the whole project directory with Duplicati unless logs and temporary files are explicitly excluded.
 
 ## Restoration
 
