@@ -13,6 +13,7 @@ LocalSource="${BITRIX_BACKUP_SOURCE_DIR:-}"
 # Explicit allowlist of program files; dot-prefixed files are excluded from extraction.
 Files=(bitrix_mysql_backup.py bitrix_mysql_backup.sh README.md README.ru.md install.sh)
 Chosen=()
+Staged=()
 TempDir=''
 
 info() { printf '%s\n' "$*"; }
@@ -20,7 +21,7 @@ error() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 cleanup() {
     local name
-    for name in "${Chosen[@]}"; do
+    for name in "${Staged[@]}"; do
         rm -f -- "$InstallDir/$name.new"
     done
     if [[ -n "$TempDir" && -d "$TempDir" ]]; then
@@ -90,39 +91,48 @@ if [[ -f "$InstallDir/bitrix_mysql_backup.py" || -f "$InstallDir/bitrix_mysql_ba
 else
     info 'Mode: first installation'
 fi
-info 'SHA-256 comparison:'
+
+Added=0
+Changed=0
+Unchanged=0
+info 'Planned file changes (SHA-256):'
 for name in "${Files[@]}"; do
     source_hash=$(hash_file "$SourceDir/$name")
     destination="$InstallDir/$name"
     if [[ -f "$destination" && ! -L "$destination" ]]; then
         target_hash=$(hash_file "$destination")
         if [[ "$source_hash" == "$target_hash" ]]; then
-            info "  SAME  $name"
-            continue
+            info "  UNCHANGED  $name"
+            ((Unchanged+=1))
+        else
+            info "  CHANGED    $name (local: ${target_hash:0:12}; source: ${source_hash:0:12})"
+            Chosen+=("$name")
+            ((Changed+=1))
         fi
-        info "  DIFF  $name (local: ${target_hash:0:12}; GitHub/source: ${source_hash:0:12})"
-        if [[ ! -r /dev/tty ]]; then
-            error 'An interactive terminal is required to approve replacing changed files'
-        fi
-        printf '  Replace %s? [y/N]: ' "$name" > /dev/tty
-        if ! IFS= read -r answer < /dev/tty; then
-            error 'Cannot read confirmation from terminal'
-        fi
-        case "$answer" in
-            y|Y|yes|YES|Yes) Chosen+=("$name");;
-            *) info "  SKIP  $name";;
-        esac
     elif [[ -e "$destination" || -L "$destination" ]]; then
         error "Unsafe target file: $destination"
     else
-        info "  NEW   $name (installing automatically)"
+        info "  ADDED      $name"
         Chosen+=("$name")
+        ((Added+=1))
     fi
 done
+info "Summary: $Added added, $Changed changed, $Unchanged unchanged."
 
-if (( ${#Chosen[@]} == 0 )); then
-    # Also support running install.sh from an already extracted ZIP archive:
-    # the files may be identical, but their executable bits may be missing.
+# No destination files are written before approving the complete plan.
+if (( ${#Chosen[@]} > 0 )); then
+    [[ -r /dev/tty && -w /dev/tty ]] || error 'An interactive terminal is required to approve changes'
+    printf 'Apply all %d file change(s)? [y/N]: ' "${#Chosen[@]}" > /dev/tty
+    if ! IFS= read -r answer < /dev/tty; then
+        error 'Cannot read confirmation from terminal'
+    fi
+    case "$answer" in
+        y|Y|yes|YES|Yes) info 'Approved. Preparing installation...';;
+        *) info 'Cancelled. No installed files were changed.'; exit 0;;
+    esac
+else
+    # Support running from an already extracted ZIP: restore executable bits
+    # even if the file content matches, and ensure backups/ exists.
     if [[ -d "$InstallDir" && ! -L "$InstallDir" ]]; then
         for name in install.sh bitrix_mysql_backup.sh; do
             if [[ -f "$InstallDir/$name" && ! -L "$InstallDir/$name" ]]; then
@@ -133,7 +143,7 @@ if (( ${#Chosen[@]} == 0 )); then
             mkdir -m 700 -- "$InstallDir/backups" || error 'Cannot create private backups directory'
         fi
     fi
-    info 'No file updates selected. Existing code was not replaced.'
+    info 'No file changes required.'
     exit 0
 fi
 
@@ -151,8 +161,14 @@ if [[ ! -d "$InstallDir/backups" ]]; then
 fi
 
 # Stage *all* approved changes before modifying any active program file.
-info 'Preparing all selected files (.new)...'
+# Refuse to overwrite an unexpected .new file, and only clean up files we own.
 for name in "${Chosen[@]}"; do
+    [[ ! -e "$InstallDir/$name.new" && ! -L "$InstallDir/$name.new" ]] \
+        || error "Staging path already exists: $InstallDir/$name.new"
+done
+info 'Preparing all approved files (.new)...'
+for name in "${Chosen[@]}"; do
+    Staged+=("$name")
     cp -- "$SourceDir/$name" "$InstallDir/$name.new" || error "Cannot stage: $name"
     case "$name" in
         *.sh) chmod 755 -- "$InstallDir/$name.new";;
@@ -165,11 +181,8 @@ done
 info 'Applying changes...'
 for name in "${Chosen[@]}"; do
     mv -f -- "$InstallDir/$name.new" "$InstallDir/$name" || error "Cannot replace: $name"
-    info "  UPDATED $name"
+    info "  APPLIED  $name"
 done
 info 'Installation/update completed. Existing SQL dumps and logs were not touched.'
-if [[ ! -f "$InstallDir/bitrix_mysql_backup.sh" || ! -f "$InstallDir/bitrix_mysql_backup.py" ]]; then
-    info 'WARNING: One or more required program files were skipped. Installation is incomplete.'
-fi
 info "Duplicati --run-script-before-required: $InstallDir/bitrix_mysql_backup.sh"
 info "Duplicati backup source: $InstallDir/backups"
