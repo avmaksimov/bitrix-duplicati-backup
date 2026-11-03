@@ -122,7 +122,7 @@ python3 ./bitrix_mysql_backup.py \
   --output-root /tmp/bitrix-backup-test
 ```
 
-Direct Python execution prints to the console only and creates **no persistent log**. The Bash hook uses `tee` to display and log Python output in real time, truncating the previous log at the start of each actual Backup. Python's exit code is forwarded to Duplicati, rather than `tee`'s.
+Direct Python execution prints to the console only and creates **no persistent log**. The Bash hook uses `tee` to display and **append** Python output to `bitrix_mysql_backup.log` in real time, keeping previous runs. Each `Backup` run is separated by a blank line and explicit start/end markers, with full start and finish timestamps (`YYYY-MM-DD HH:MM:SS`), duration, and `SUCCESS` or `FAILED` result. All diagnostic lines include a date and time. Python's exit code is forwarded to Duplicati, rather than `tee`'s.
 
 ## Dump algorithm
 
