@@ -11,7 +11,7 @@ GitHubRepo="${BITRIX_BACKUP_GITHUB_REPO:-avmaksimov/bitrix-duplicati-backup}"
 GitHubBranch="${BITRIX_BACKUP_BRANCH:-main}"
 LocalSource="${BITRIX_BACKUP_SOURCE_DIR:-}"
 # Explicit allowlist of program files; dot-prefixed files are excluded from extraction.
-Files=(bitrix_mysql_backup.py bitrix_mysql_backup.sh README.md README.ru.md install.sh)
+Files=(bitrix_mysql_backup.py bitrix_mysql_backup.sh README.md README.en.md install.sh)
 Chosen=()
 Staged=()
 TempDir=''

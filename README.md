@@ -1,52 +1,52 @@
-# Bitrix MySQL backup for Duplicati
+# Резервное копирование MySQL Битрикс24 через Duplicati
 
-[English README](README.md) · [Русский README](README.ru.md)
+[Русский](README.md) · [English](README.en.md)
 
-`bitrix-duplicati-backup` is a small backup helper for **self-hosted Bitrix24 / BitrixVM**. Before a Duplicati backup, it dumps InnoDB data from a **single consistent MySQL transaction** and writes **one importable SQL file per table**. Keeping tables separate can improve Duplicati deduplication and makes selective restores easier.
+`bitrix-duplicati-backup` — небольшой набор скриптов для **Битрикс24 в коробке / BitrixVM**. Перед резервным копированием Duplicati программа создаёт согласованный дамп таблиц **InnoDB** из одной транзакции MySQL и сохраняет **отдельный SQL-файл для каждой таблицы**. Это удобно для дедупликации Duplicati и выборочного восстановления.
 
-This is a **Bitrix-specific** tool, not a general-purpose MySQL backup framework. Its source may be adapted as an example; configurable databases, credentials, backup services and table rules would require further work or a separate fork.
+Проект рассчитан на Битрикс. Код также может служить примером для универсального MySQL-бэкапера, но сейчас не поддерживает произвольные базы, учётные записи или перечни сервисов: для такого использования потребуется отдельная доработка или форк.
 
-## Repository layout
+## Состав
 
-| File / directory | Role |
+| Файл | Назначение |
 | --- | --- |
-| `bitrix_mysql_backup.sh` | Duplicati hook: Backup-only operation guard; start/end logging; real-time `tee` |
-| `bitrix_mysql_backup.py` | MySQL snapshot, SQL stream splitter, validation and publishing |
-| `install.sh` | One interactive install/update command using `curl`, with no Git required |
-| `README.md`, `README.ru.md` | English and Russian documentation |
-| `.gitignore` | Repository-only exclusions; not extracted or installed by `install.sh` |
-| `backups/` | Locally generated database dumps, excluded from Git |
+| `bitrix_mysql_backup.sh` | Обёртка Duplicati: **только** операция `Backup`, начало/окончание журнала и `tee` |
+| `bitrix_mysql_backup.py` | Подключение к MySQL, единый дамп, разделение файлов, проверка и публикация |
+| `install.sh` | Универсальная **ручная установка/обновление через curl**, без Git на сервере |
+| `README.md`, `README.en.md` | Инструкции на русском (основная) и английском языках |
+| `.gitignore` | Исключения самого GitHub-репозитория; установщик не распаковывает скрытые файлы |
 
-Installation layout (**choose any directory**):
+После установки (в **любом выбранном каталоге**):
 
 ```text
-<project-directory>/
+<каталог-проекта>/
 ├── install.sh
 ├── bitrix_mysql_backup.sh
 ├── bitrix_mysql_backup.py
-├── bitrix_mysql_backup.log       # created only by Backup through Bash
+├── bitrix_mysql_backup.log      # создаётся только при Backup через Bash
 ├── README.md
-├── README.ru.md
-└── backups/
-    └── bitrix_88.sql/           # DB name comes from Bitrix dbconn.php
+├── README.en.md
+└── backups/                    # исключено из Git
+    └── bitrix_88.sql/          # имя определяется автоматически из dbconn.php
         ├── b_user.sql
+        ├── b_ticket.sql
         └── ...
 ```
 
-## Requirements
+## Требования
 
-- Linux with Bash, Python 3, `mysql`, `mysqldump`; `curl`, `tar`, `sha256sum`, and standard shell utilities for the installer.
-- Read access to `/home/bitrix/www/bitrix/php_interface/dbconn.php` and connectivity to `/var/lib/mysqld/mysqld.sock`.
-- **InnoDB** for all base tables; a different storage engine causes the dump to fail safely.
-- The account running the hook must be able to read Bitrix configuration and write the log and SQL files. The installer creates private `backups/` permissions (`700`); verify service-user access if Duplicati runs as a different user.
-- Disk space for old and new SQL snapshots simultaneously while creating a backup.
-- A **public GitHub repository** for the unauthenticated `curl` installer. Private repositories are not currently supported.
+- Linux, Bash, Python 3, `mysql`, `mysqldump`; `curl`, `tar`, `sha256sum` и стандартные утилиты для `install.sh`.
+- Доступ локально к `/home/bitrix/www/bitrix/php_interface/dbconn.php` и MySQL-сокету `/var/lib/mysqld/mysqld.sock`.
+- Все таблицы базы должны использовать **InnoDB**. Иные движки приводят к ошибке до публикации нового комплекта.
+- Учетная запись, запускающая скрипт из Duplicati, должна иметь права читать `dbconn.php`, подключаться к MySQL и создавать SQL/журнал. По умолчанию каталог `backups/` имеет права `700`, SQL — приватные: если Duplicati запущен другим пользователем, проверьте доступ отдельно.
+- Достаточно свободного места для **старого и нового комплекта дампов одновременно**; при обновлении дампа на диске одновременно находятся старый и новый комплекты.
+- Для загрузки из GitHub репозиторий должен быть **публичным**; приватный без авторизации не поддерживается.
 
-## First installation and updates
+## Установка и обновление — одна команда
 
-Run the installer manually, **not as part of the Duplicati backup job**. By default, it installs into **the directory containing `install.sh`**, regardless of the current working directory. Choose any suitable path, such as `/opt/bitrix_mysql_backup` or `/usr/scripts/bitrix_mysql_backup`.
+Установщик запускается **вручную**, отдельно от заданий Duplicati. **Каталогом установки по умолчанию является папка, где находится `install.sh`**, независимо от текущего рабочего каталога. Например, можно выбрать `/usr/scripts/bitrix_mysql_backup`, `/opt/bitrix_mysql_backup` или собственный путь.
 
-For example, create a directory and download the installer into it:
+Создайте нужную папку и скачайте в неё установщик:
 
 ```bash
 mkdir -p /opt/bitrix_mysql_backup
@@ -56,92 +56,92 @@ curl -fL --output install.sh \
 bash install.sh
 ```
 
-For future updates, run the same installer:
+Для дальнейших обновлений запустите тот же установщик из этой папки:
 
 ```bash
 bash /opt/bitrix_mysql_backup/install.sh
 ```
 
-`/opt/bitrix_mysql_backup` is **only an example**, not a required location. If you already extracted the project into the chosen directory, you may run it there; the installer also ensures `.sh` executable permissions if files are already identical.
+`/opt/bitrix_mysql_backup` здесь **только пример**, это не обязательный системный путь. Если файлы проекта уже распакованы в выбранную папку, их можно использовать прямо там; установщик также обеспечивает исполняемые права `.sh` при совпадающих файлах.
 
-Both commands download the `main` branch archive using `curl`, extract it **without dot-prefixed files or directories** (such as `.gitignore` and `.github/`), and compare the five program files using **SHA-256**. Hidden files remain in the downloaded archive but are skipped during extraction.
+В обоих случаях установщик скачает архив ветки `main` через `curl`, распакует его **без скрытых файлов и каталогов** (например, `.gitignore`, `.github/`) и сравнит пять файлов программы по **SHA-256**. Скрытые файлы присутствуют в скачанном архиве, но при распаковке пропускаются.
 
-**The installer first presents the complete plan:** `ADDED` for missing files, `CHANGED` for different existing files, and `UNCHANGED` for identical files. It then requests **one confirmation for all additions and replacements**: `Apply all N file change(s)? [y/N]` (Enter cancels). Installed files are not changed before confirmation. If there are no content changes, no confirmation is required. `install.sh` is treated like any other file: an identical copy is left alone, while a differing copy is part of the approval plan. Different checksums mean **different content**, not necessarily a newer remote version.
+**Сначала выводится полный план изменений:** `ADDED` — новый файл, `CHANGED` — существующий файл отличается, `UNCHANGED` — содержимое совпадает. Затем установщик запрашивает **одно подтверждение на все добавления и замены**: `Apply all N file change(s)? [y/N]` (Enter — отмена). До подтверждения рабочие файлы не изменяются. Если отличий нет, подтверждение не требуется. Сам `install.sh` сравнивается на общих основаниях: если он совпадает, замены не будет; если отличается — его замена войдёт в общий план. Разные SHA означают только различающееся содержимое, а не обязательно более новую версию.
 
-After confirmation, all changed files are staged next to their targets as `.new`, verified using SHA-256, then replaced individually with `mv`. Shell scripts receive mode `755`, all other tracked files `644`. SQL backups and logs are never overwritten by the installer. There are no copies of old scripts and no automatic rollback; **the whole group of files is not replaced transactionally**. Update only when no Duplicati job is running.
+После подтверждения все изменяемые файлы копируются как `.new` рядом с целевыми и проверяются повторным SHA-256, затем последовательно заменяются через `mv`. `.sh` получают `755`, остальные файлы — `644`. Существующие SQL-дампы и журнал не обновляются. Старые скрипты не архивируются, автоматического отката нет. **Комплект файлов заменяется не атомарно целиком**, поэтому обновление делайте вне работающего задания Duplicati.
 
-Git is **not required** and the installer never installs operating-system packages. Override the repository, branch or destination when needed:
+Установка не требует Git и **не устанавливает** пакеты ОС. Для других репозитория/ветки/пути установки можно задать:
 
 ```bash
 BITRIX_BACKUP_GITHUB_REPO=OWNER/bitrix-duplicati-backup \
 BITRIX_BACKUP_BRANCH=main \
-BITRIX_BACKUP_INSTALL_DIR=/another/directory \
+BITRIX_BACKUP_INSTALL_DIR=/другой/каталог \
   bash install.sh
 ```
 
-For **local/offline testing**, point to an unpacked source directory:
+**Локальная установка для разработки** (если исходники находятся в `/tmp/bitrix-duplicati-backup`):
 
 ```bash
 BITRIX_BACKUP_SOURCE_DIR=/tmp/bitrix-duplicati-backup bash /tmp/bitrix-duplicati-backup/install.sh
 ```
 
-This uses the same comparison/staging/replacement procedure without downloading any files from GitHub.
+Это тот же алгоритм обновления, но файлы берутся из локального каталога без обращения к GitHub.
 
-## Configure Duplicati
+## Настройка Duplicati
 
-Use these job advanced options:
+В дополнительных настройках нужного задания:
 
 ```text
 --run-script-before-required = /opt/bitrix_mysql_backup/bitrix_mysql_backup.sh
 --run-script-timeout = 1h
 ```
 
-Add `<project-directory>/backups/` (or its `<database>.sql` child) to the **backup source paths**. The example above uses `/opt/bitrix_mysql_backup`; replace it with your own absolute path. The installer sets `.sh` files executable automatically. A required hook prevents Duplicati from backing up an invalid or stale SQL set if preparation fails.
+В **источники резервного копирования** добавьте `<каталог-проекта>/backups/` или конкретную папку `<имя_базы>.sql` внутри неё. Выше указан пример для `/opt/bitrix_mysql_backup`; используйте свой абсолютный путь. Установщик выставляет исполняемые права `.sh` автоматически. `--run-script-before-required` важен: при ошибке Python он сообщает ненулевой код, и операция Backup должна прерваться, а не архивировать старый/неполный набор дампов.
 
-The wrapper skips every operation other than `Backup`, including `Restore`. Code updates are never performed while preparing a backup.
+Обёртка игнорирует любые операции, кроме `Backup` (включая `Restore`). Обновление кода **никогда не происходит автоматически** при резервном копировании.
 
-## Manual checks
+## Ручная проверка
 
 ```bash
-cd /opt/bitrix_mysql_backup  # change to your chosen directory
+cd /opt/bitrix_mysql_backup  # замените на свой каталог
 
-# Does not dump anything: this is not Backup
+# Ничего не выгружает — операция не Backup
 DUPLICATI__OPERATIONNAME=Restore ./bitrix_mysql_backup.sh
 
-# Runs the real dump and writes the log
+# Реально создаёт SQL-файлы и журнал
 DUPLICATI__OPERATIONNAME=Backup ./bitrix_mysql_backup.sh
 
 echo "Exit code: $?"
 tail -n 40 ./bitrix_mysql_backup.log
 ```
 
-To create a separate test set without overwriting active SQL dumps:
+Для независимого теста Python без обновления рабочего комплекта:
 
 ```bash
 python3 ./bitrix_mysql_backup.py \
   --output-root /tmp/bitrix-backup-test
 ```
 
-Direct Python execution prints to the console only and creates **no persistent log**. The Bash hook uses `tee` to display and **append** Python output to `bitrix_mysql_backup.log` in real time, keeping previous runs. Each `Backup` run is separated by a blank line and explicit start/end markers, with full start and finish timestamps (`YYYY-MM-DD HH:MM:SS`), duration, and `SUCCESS` or `FAILED` result. All diagnostic lines include a date and time. Python's exit code is forwarded to Duplicati, rather than `tee`'s.
+Прямой запуск Python **не пишет журнал на диск**, а выводит диагностические сообщения в консоль. При запуске через Bash `tee` показывает их сразу и **дописывает** в `bitrix_mysql_backup.log`, не удаляя записи предыдущих запусков. Каждый запуск `Backup` отделяется пустой строкой и явными маркерами начала и окончания; записываются полные даты и время начала и окончания (`ГГГГ-ММ-ДД ЧЧ:ММ:СС`), длительность и результат (`SUCCESS` или `FAILED`). Все диагностические строки содержат дату и время. Код возврата Python передаётся Duplicati даже при использовании `tee`.
 
-## Dump algorithm
+## Как работает дамп
 
-1. Read the DB name, user, password and encoding from Bitrix `dbconn.php`. Credentials are never printed. A private temporary MySQL options file (`*.cnf`, mode `600`) is removed in `finally` on normal or handled exits.
-2. Enumerate MySQL objects and require InnoDB for all base tables.
-3. Run **one** `mysqldump --single-transaction --quick` for the full-data tables, streaming SQL directly into individual files without a large intermediate whole-database dump.
-4. Save schema only for `b_stat*`, most `b_search_*`, and `b_ticket_search`. Preserve data for `b_search_custom_rank` and `b_search_phrase`.
-5. Write an individual `.sql` for each table, and optional `__objects.sql` / `__views.sql` for other database objects.
-6. Check expected table names, nonempty SQL files and MySQL exit codes.
-7. Create the new snapshot under a staging directory in `backups/`; after validation, move the old set aside briefly, replace it with the new set, and remove the previous set. A failure before publishing leaves the previous set intact.
+1. Из `dbconn.php` читаются имя базы, пользователь и пароль, а также определяется кодировка Битрикс. Пароль не выводится в журнал и записывается только во временный файл `*.cnf` с ограниченными правами; файл удаляется в `finally`.
+2. Читается список объектов MySQL и проверяется движок таблиц.
+3. Один `mysqldump --single-transaction --quick` формирует согласованный снимок **полных** таблиц InnoDB, без большого промежуточного SQL-файла: поток сразу разбивается Python на отдельные файлы.
+4. Для `b_stat*`, большинства `b_search_*` и `b_ticket_search` сохраняется **только структура**. Исключения `b_search_custom_rank` и `b_search_phrase` сохраняются вместе с данными.
+5. Каждая таблица получает собственный `.sql`. Дополнительные объекты (если существуют) могут сохраняться как `__objects.sql` / `__views.sql`.
+6. Результат проверяется по количеству ожидаемых таблиц, их наличию, непустоте файлов и завершению `mysqldump` без ошибок.
+7. Новый комплект формируется во временном каталоге внутри `backups/`. После успеха предыдущий каталог временно переименовывается, новый занимает его место, предыдущий удаляется. При ошибке до публикации прежний комплект сохраняется.
 
-**Limitations:** the transaction provides consistency for participating InnoDB table data provided no concurrent schema changes (`ALTER`/`DROP`/`TRUNCATE`, etc.). The separately produced schema-only tables are not from that same timestamp. Search indexes and statistics are intentionally omitted. Validation checks that files exist and have plausible structure; **it does not test SQL restore**.
+**Ограничения:** снимок гарантирован для участвующих InnoDB-таблиц при отсутствии параллельных DDL-операций (`ALTER`/`DROP`/`TRUNCATE` и т. п.). Таблицы, выгружаемые отдельно «только структура», не относятся к тому же моменту времени. Не все поисковые индексы и статистические данные сохраняются. Скрипт проверяет комплектность, **но не осуществляет тестовое восстановление**; рабочее восстановление следует проверить отдельно.
 
-The persistent `.bitrix_mysql_backup.lock` file coordinates concurrent runs: its OS lock is automatically released when Python exits, but the file itself is not deleted. **Do not delete this file**, as doing so can break the protection against parallel runs. If Duplicati backs up the entire project directory, exclude `*/.bitrix_mysql_backup.lock`, `*/bitrix_mysql_backup.log`, and temporary `*/.bitrix_mysql_db.*.cnf` files. A sudden machine crash or `SIGKILL` can leave temporary `.cnf` files or staging directories; check for stale artifacts when recovering from interrupted runs. Do not archive the whole project directory with Duplicati unless logs and temporary files are explicitly excluded.
+Файл `.bitrix_mysql_backup.lock` остаётся на диске между запусками: сама блокировка освобождается при завершении Python. **Не удаляйте lock-файл**: это может нарушить защиту от параллельных запусков. При архивировании всего каталога проекта добавьте в исключения Duplicati `*/.bitrix_mysql_backup.lock` (а также `*/bitrix_mysql_backup.log` и временные `*/.bitrix_mysql_db.*.cnf`). Временный `*.cnf` удаляется при штатном завершении/обрабатываемой ошибке. При `SIGKILL`, падении системы и иных внезапных остановках на диске могут остаться временные каталоги или `.cnf`; периодически проверяйте такие остатки. Не включайте всю папку проекта в источник Duplicati без исключений, чтобы случайно не архивировать журналы и временные файлы.
 
-## Restoration
+## Восстановление
 
-Individual `.sql` files are intended for import into a chosen MySQL database. Full restoration requires consideration of table dependencies, triggers, `__views.sql` / `__objects.sql`, and consistency with uploaded Bitrix files outside MySQL. Test restoration independently before relying on the backups in production.
+SQL-файлы предназначены для импорта в выбранную базу **отдельно**. При восстановлении большого количества таблиц необходимо учитывать зависимости, триггеры и объекты `__objects.sql`/`__views.sql`. Порядок импорта и согласованность файлов портала вне MySQL требуют отдельной процедуры. Наличие `.sql` не гарантирует успешное восстановление без пробного импорта.
 
-## License
+## Лицензия
 
-Before public distribution, choose and add a `LICENSE` (MIT is one possible choice if reuse and forks are desired). A public repository without an explicit license does not automatically grant redistribution rights.
+Проект распространяется на условиях [лицензии MIT](LICENSE).
